@@ -1,5 +1,5 @@
 # Autopilot telegraf
-*Containerized telegraf server, based on the official telegraf/1.0 Docker image, adding [ContainerPilot](https://www.joyent.com/containerpilot) to announce this container's telegraf service to a Service Discovery layer, such as Consul or etcd.
+Containerized telegraf server, based on the official telegraf/1.0 Docker image, adding [ContainerPilot](https://www.joyent.com/containerpilot) to announce this container's telegraf service to a Service Discovery layer, such as Consul or etcd.
 
 ### Usage
 Include this image in your Docker Compose project, query Consul for it's IP address and use it in your configurations, easily done via [Consul-Template](https://github.com/hashicorp/consul-template). The default ContainerPilot configuration talks to Consul and assumes the IP address to access consul is passed to the container in an envrionment varible, $CONSUL (or via docker link consul)
@@ -24,7 +24,7 @@ Start everything:
 docker-compose build
 docker-compose up -d
 ```
-In result we'll have 3 containers running:
+In result we'll have 4 containers running:
 - consul 
 - telegraf_nginx_1 - nginx web-server is used just for demo purposes to scale and provide telemetry
 - influxdb - currently running locally, but it's possible to connect with existing influxdb server
@@ -34,6 +34,8 @@ To verify telegraf container status you can check container log (there should be
 ```bash
 docker logs telegraf 2>&1 | grep EventMemberJoin
 ```
+it should display a list of members(input sources) recently added.
+
 Also you check the list of input source urls for telemetry currently used by telegraf with the following command:
 ```bash
 docker exec -i -t telegraf /bin/grep :9090 /etc/telegraf.conf
