@@ -10,6 +10,12 @@ Telegraf output is convigured with InfluxDB output plugin. By default telegraf i
 
 Telegraf input sources configured with prometheus input plugin and represent a list of urls pointing to container-pilot telemetry endpoints (http://container-ip:9090/metrics). Input sources reloaded automatically with `onChange` event handler.
 
+### Configuration
+
+Please run setup.sh to generate required _env file and configure CONSUL env variable.
+
+You can also check _env.telegraf file. By setting INFLUXDB_HOST variable there you can point telegraf to already running instance of InfluxDB (you have to remove influxdb section from docker-compose.yml in this case).
+
 ### Hello world example
 
 1. [Get a Joyent account](https://my.joyent.com/landing/signup/) and [add your SSH key](https://docs.joyent.com/public-cloud/getting-started).
@@ -79,3 +85,10 @@ And the following query should display a list of nginx specfic telemetry recorod
 ```
 SELECT * FROM nginx_connections_load WHERE time > now() - 5m
 ```
+
+At the end of test you can shutdown containers with the following command:
+```
+docker-compose kill
+```
+
+
