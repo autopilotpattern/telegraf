@@ -1,0 +1,78 @@
+# Telegraf autopilotpattern demo
+
+# Consul - start with a single host which will bootstrap the cluster.
+# In production we'll want to use an HA cluster.
+consul:
+    container_name: consul
+    image: progrium/consul:latest
+    restart: always
+    mem_limit: 128m
+    expose:
+      - 53
+      - 8300
+      - 8301
+      - 8302
+      - 8400
+      - 8500
+    ports:
+      - 8500 # expose only Consul's UI on the public IP
+    dns:
+      - 127.0.0.1
+    labels:
+      - triton.cns.services=consul
+    command: -server -bootstrap -ui-dir /ui
+
+# Telegraf should autodiscovery all autopilot containers,
+# collect telemetry from there, and send output to influxdb.
+telegraf:
+    container_name: telegraf
+    #image: autopilotpattern/telegraf
+    build: . # for now use local image build
+    mem_limit: 128m
+    expose:
+        - 8094 # necessary for healthcheck
+        - 9090 # so we can see telemetry
+    restart: always
+    links:
+      - consul:consul
+      - influxdb:influxdb
+    environment:
+      - CONSUL_AGENT=1
+      - CONSUL=consul
+      - INFLUXDB=influxdb
+    env_file: 
+      - _env
+      - _env.telegraf
+    labels:
+      - triton.cns.services=telegraf
+
+# InfluxDB
+influxdb:
+    container_name: influxdb
+    image: influxdb:latest
+    mem_limit: 512m
+    ports:
+      - "8083:8083"
+      - "8086:8086"
+      - "8090:8090"
+    env_file:
+      - '_env'
+
+# Ngix included for demonstration of input sources for telegraf
+# we can scale it and demonstrate auto capturing of nginx containers telemetry by telegraf
+nginx:
+    image: autopilotpattern/nginx
+    restart: always
+    mem_limit: 128m
+    ports:
+      - 80   # http port
+      - 9090 # so we can see telemetry
+    links:
+      - consul:consul
+    environment:
+      - CONSUL_AGENT=1
+      - CONSUL=consul
+      - BACKEND=consul # backend is required, so lets point to consul just for demo purposes
+    env_file: _env
+    labels:
+      - triton.cns.services=nginx
