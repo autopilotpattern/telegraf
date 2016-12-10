@@ -1,0 +1,5 @@
+# InfluxDB settings
+# (uncomment to change default influxdb host/database to custom url)
+#INFLUXDB_HOST=influxdb # docker alias or real hostname
+#INFLUXDB_DATABASE=telegraf
+#INFLUXDB_DATA_ENGINE=tsm1
