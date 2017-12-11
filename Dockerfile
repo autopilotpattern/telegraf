@@ -1,16 +1,14 @@
-#FROM telegraf:1.0-alpine
-FROM telegraf:1.0
+FROM telegraf:1.4-alpine
 
 # Reset to root user to do some installs
 USER root
 
 # Install packages
-RUN apt-get update && apt-get -y install \
+RUN apk add --no-cache iputils ca-certificates net-snmp-tools procps && \
     bash \
     curl \
-    unzip \
-    netcat-openbsd \
-    && rm -rf /var/cache/apt/* /var/lib/apt/lists/* /tmp/* /var/tmp/*
+    jq
+    unzip
 
 # Add ContainerPilot and its configuration
 # Releases at https://github.com/joyent/containerpilot/releases
