@@ -17,45 +17,25 @@ help() {
 export COMPOSE_PROJECT_NAME=telegraf
 export COMPOSE_FILE=
 
-# give the docker remote api more time before timeout
-export COMPOSE_HTTP_TIMEOUT=300
-
-# populated by `check` function whenever we're using Triton
-TRITON_USER=
-TRITON_DC=
-TRITON_ACCOUNT=
-
 # ---------------------------------------------------
-# Top-level commmands
+# Top-level commands
 
 
 # Check for correct configuration
 check() {
 
-    command -v docker >/dev/null 2>&1 || {
+    # check for Triton Docker CLI
+    command -v triton-compose >/dev/null 2>&1 || {
         echo
         tput rev  # reverse
         tput bold # bold
-        echo 'Docker is required, but does not appear to be installed.'
+        echo 'Triton Docker CLI tools are required, but do not appear to be installed.'
         tput sgr0 # clear
-        echo 'See https://docs.joyent.com/public-cloud/api-access/docker'
-        exit 1
-    }
-    command -v json >/dev/null 2>&1 || {
-        echo
-        tput rev  # reverse
-        tput bold # bold
-        echo 'Error! JSON CLI tool is required, but does not appear to be installed.'
-        tput sgr0 # clear
-        echo 'See https://apidocs.joyent.com/cloudapi/#getting-started'
+        echo 'See https://github.com/joyent/triton-docker-cli'
         exit 1
     }
 
-    # if we're not testing on Triton, don't bother checking Triton config
-    if [ ! -z "${COMPOSE_FILE}" ]; then
-        exit 0
-    fi
-
+    # check for Triton CLI tool (it should be installed, given the above, but...)
     command -v triton >/dev/null 2>&1 || {
         echo
         tput rev  # reverse
@@ -66,26 +46,12 @@ check() {
         exit 1
     }
 
-    # make sure Docker client is pointed to the same place as the Triton client
-    local docker_user=$(docker info 2>&1 | awk -F": " '/SDCAccount:/{print $2}')
-    local docker_dc=$(echo $DOCKER_HOST | awk -F"/" '{print $3}' | awk -F'.' '{print $1}')
-    TRITON_USER=$(triton profile get | awk -F": " '/account:/{print $2}')
-    TRITON_DC=$(triton profile get | awk -F"/" '/url:/{print $3}' | awk -F'.' '{print $1}')
-    TRITON_ACCOUNT=$(triton account get | awk -F": " '/id:/{print $2}')
-    if [ ! "$docker_user" = "$TRITON_USER" ] || [ ! "$docker_dc" = "$TRITON_DC" ]; then
-        echo
-        tput rev  # reverse
-        tput bold # bold
-        echo 'Error! The Triton CLI configuration does not match the Docker CLI configuration.'
-        tput sgr0 # clear
-        echo
-        echo "Docker user: ${docker_user}"
-        echo "Triton user: ${TRITON_USER}"
-        echo "Docker data center: ${docker_dc}"
-        echo "Triton data center: ${TRITON_DC}"
-        exit 1
-    fi
+    # set env vars for everything else that follows
+    eval "$(triton env ${TRITON_PROFILE})"
+    TRITON_DC=$(echo $SDC_URL | awk -F"/" '{print $3}' | awk -F'.' '{print $1}')
+    TRITON_ACCOUNT_UUID=$(triton account get | awk -F": " '/id:/{print $2}')
 
+    # make sure CNS is enabled
     local triton_cns_enabled=$(triton account get | awk -F": " '/cns/{print $2}')
     if [ ! "true" == "$triton_cns_enabled" ]; then
         echo
@@ -97,7 +63,36 @@ check() {
         exit 1
     fi
 
-    echo CONSUL=consul.svc.${TRITON_ACCOUNT}.${TRITON_DC}.cns.joyent.com >> _env
+
+
+    echo '# Autopilot Pattern Telegraf configuration' > _env
+    echo >> _env
+
+    echo '# Telegraf output plugin: InfluxDB ' >> _env
+    echo '# (uncomment to change defaults) ' >> _env
+    echo '#INFLUXDB_HOST=influxdb # docker alias or real hostname' >> _env
+    echo '#INFLUXDB_DATABASE=telegraf' >> _env
+    echo '#INFLUXDB_DATA_ENGINE=tsm1' >> _env
+    echo >> _env
+
+    echo '# Triton Container Monitor (uses Prometheus input plugin in Telegraf)' >> _env
+    echo TRITON_ACCOUNT_UUID=${TRITON_ACCOUNT_UUID} >> _env
+    echo '# This works for Triton Public Cloud, but change it for other clouds:' >> _env
+    echo TRITON_CNS_SUFFIX=.triton.zone >> _env
+    echo '# Leave empty or unset and Autopilot Pattern Telegraf will automatically detect the DC:' >> _env
+    echo '#TRITON_DC=' >> _env
+    echo >> _env
+
+    echo '# Triton Container Monitor authentication' >> _env
+    TRITON_CREDS_PATH=/root/.triton
+    echo TRITON_CREDS_PATH=${TRITON_CREDS_PATH} >> _env
+    echo TRITON_CA=$(cat "${DOCKER_CERT_PATH}"/ca.pem | tr '\n' '#') >> _env
+    echo TRITON_CA_PATH=${TRITON_CREDS_PATH}/ca.pem >> _env
+    echo TRITON_KEY=$(cat "${DOCKER_CERT_PATH}"/key.pem | tr '\n' '#') >> _env
+    echo TRITON_KEY_PATH=${TRITON_CREDS_PATH}/key.pem >> _env
+    echo TRITON_CERT=$(cat "${DOCKER_CERT_PATH}"/cert.pem | tr '\n' '#') >> _env
+    echo TRITON_CERT_PATH=${TRITON_CREDS_PATH}/cert.pem >> _env
+    echo >> _env
 }
 
 # ---------------------------------------------------
