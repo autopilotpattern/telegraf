@@ -1,78 +1,85 @@
+version: '2.1'
 # Telegraf autopilotpattern demo
 
-# Consul - start with a single host which will bootstrap the cluster.
-# In production we'll want to use an HA cluster.
-consul:
-    container_name: consul
-    image: progrium/consul:latest
-    restart: always
-    mem_limit: 128m
-    expose:
-      - 53
-      - 8300
-      - 8301
-      - 8302
-      - 8400
-      - 8500
-    ports:
-      - 8500 # expose only Consul's UI on the public IP
-    dns:
-      - 127.0.0.1
-    labels:
-      - triton.cns.services=consul
-    command: -server -bootstrap -ui-dir /ui
+services:
+    # Telegraf should autodiscovery all Autopilot Pattern containers,
+    # as well as all instances in Triton Container Monitor (https://docs.joyent.com/public-cloud/api-access/prometheus),
+    # collect telemetry from there, and send output to influxdb.
+    telegraf:
+        image: autopilotpattern/telegraf:${TAG:-latest}
+        # Use a 128MB instance (also see com.joyent.package label below)
+        mem_limit: 128m
+        # Joyent recommends setting instances to always restart on Triton
+        restart: always
+        labels:
+            # This label sets the CNS name, Triton's automatic DNS
+            # Learn more at https://docs.joyent.com/public-cloud/network/cns
+            - triton.cns.services=telegraf
+            # This label selects the proper Joyent resource package
+            # https://www.joyent.com/blog/optimizing-docker-on-triton#ram-cpu-and-disk-resources-for-your-containers
+            - com.joyent.package=g4-highcpu-128M
+        network_mode: bridge
+        ports:
+            # You may not want these port declarations for production. Without them, Prometheus will only
+            # listen on the private network. This will also result in a public prometheus CNS record being created,
+            # in the triton.zone domain.
+            - 9090
+        env_file: _env
+        environment:
+            - CONSUL_AGENT=1
+            - CONSUL=telegraph-consul.svc.${TRITON_CNS_SEARCH_DOMAIN_PRIVATE}
 
-# Telegraf should autodiscovery all autopilot containers,
-# collect telemetry from there, and send output to influxdb.
-telegraf:
-    container_name: telegraf
-    #image: autopilotpattern/telegraf
-    build: . # for now use local image build
-    mem_limit: 128m
-    expose:
-        - 8094 # necessary for healthcheck
-        - 9090 # so we can see telemetry
-    restart: always
-    links:
-      - consul:consul
-      - influxdb:influxdb
-    environment:
-      - CONSUL_AGENT=1
-      - CONSUL=consul
-      - INFLUXDB=influxdb
-    env_file: 
-      - _env
-      - _env.telegraf
-    labels:
-      - triton.cns.services=telegraf
+    # Telegraf should autodiscovery all autopilot containers,
+    # collect telemetry from there, and send output to influxdb.
+    telegraf:
+        container_name: telegraf
+        #image: autopilotpattern/telegraf
+        build: . # for now use local image build
+        mem_limit: 128m
+        expose:
+            - 8094 # necessary for healthcheck
+            - 9090 # so we can see telemetry
+        restart: always
+        links:
+          - consul:consul
+          - influxdb:influxdb
+        environment:
+          - CONSUL_AGENT=1
+          - CONSUL=consul
+          - INFLUXDB=influxdb
+        env_file:
+          - _env
+        labels:
+          - triton.cns.services=telegraf
 
-# InfluxDB
-influxdb:
-    container_name: influxdb
-    image: influxdb:latest
-    mem_limit: 512m
-    ports:
-      - "8083:8083"
-      - "8086:8086"
-      - "8090:8090"
-    env_file:
-      - '_env'
+    # InfluxDB
+    influxdb:
+        container_name: influxdb
+        image: influxdb:latest
+        mem_limit: 512m
+        ports:
+          - "8083:8083"
+          - "8086:8086"
+          - "8090:8090"
+        env_file:
+          - '_env'
 
-# Ngix included for demonstration of input sources for telegraf
-# we can scale it and demonstrate auto capturing of nginx containers telemetry by telegraf
-nginx:
-    image: autopilotpattern/nginx
-    restart: always
-    mem_limit: 128m
-    ports:
-      - 80   # http port
-      - 9090 # so we can see telemetry
-    links:
-      - consul:consul
-    environment:
-      - CONSUL_AGENT=1
-      - CONSUL=consul
-      - BACKEND=consul # backend is required, so lets point to consul just for demo purposes
-    env_file: _env
-    labels:
-      - triton.cns.services=nginx
+    # Consul is the service catalog
+    consul:
+        image: autopilotpattern/consul:0.7.2-r0.8
+        command: >
+            /usr/local/bin/containerpilot
+            /bin/consul agent -server
+                -bootstrap-expect 1
+                -config-dir=/etc/consul
+                -ui-dir /ui
+                # Change "-bootstrap" to "-bootstrap-expect 3", then scale to 3 or more to
+                # turn this into an HA Consul raft.
+        restart: always
+        mem_limit: 128m
+        ports:
+            # As above, this port delcaration should not be made for production.
+            - 8500
+        labels:
+            - triton.cns.services=telegraph-consul
+        network_mode: bridge
