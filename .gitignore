@@ -1,0 +1,7 @@
+# credentials
+_env*
+manta*
+
+# macos frustration
+.DS_Store
+
