@@ -103,7 +103,7 @@
 #                            INPUT PLUGINS                                    #
 ###############################################################################
 
-# # Read metrics from one or many prometheus clients
+# # Use Prometheus input plugin for Triton Container Monitor metrics
 [[inputs.prometheus]]
    ## An array of urls to scrape metrics from.
     {{ if service "containerpilot" }} 
@@ -112,12 +112,9 @@
     urls = ["http://localhost:9090/metrics"]
     {{ end }}
 
-#   ## Use bearer token for authorization
-#   # bearer_token = /path/to/bearer/token
-#
 #   ## Optional SSL Config
-    ssl_ca = "/path/ca.pem"
-    ssl_cert = "/path/to/cert.pem"
-    ssl_key = "/path/to/key.pem"
+    ssl_ca = "/root/.triton/ca.pem"
+    ssl_cert = "/root/.triton/cert.pem"
+    ssl_key = "/root/.triton/key.pem"
 #   ## Use SSL but skip chain & host verification
     insecure_skip_verify = false

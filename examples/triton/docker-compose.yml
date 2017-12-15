@@ -30,34 +30,11 @@ services:
             - CONSUL_AGENT=1
             - CONSUL=telegraph-consul.svc.${TRITON_CNS_SEARCH_DOMAIN_PRIVATE}
 
-    # Telegraf should autodiscovery all autopilot containers,
-    # collect telemetry from there, and send output to influxdb.
-    telegraf:
-        container_name: telegraf
-        #image: autopilotpattern/telegraf
-        build: . # for now use local image build
-        mem_limit: 128m
-        expose:
-            - 8094 # necessary for healthcheck
-            - 9090 # so we can see telemetry
-        restart: always
-        links:
-          - consul:consul
-          - influxdb:influxdb
-        environment:
-          - CONSUL_AGENT=1
-          - CONSUL=consul
-          - INFLUXDB=influxdb
-        env_file:
-          - _env
-        labels:
-          - triton.cns.services=telegraf
-
     # InfluxDB
     influxdb:
-        container_name: influxdb
         image: influxdb:latest
         mem_limit: 512m
+        network_mode: bridge
         ports:
           - "8083:8083"
           - "8086:8086"
@@ -78,6 +55,7 @@ services:
                 # turn this into an HA Consul raft.
         restart: always
         mem_limit: 128m
+        network_mode: bridge
         ports:
             # As above, this port delcaration should not be made for production.
             - 8500

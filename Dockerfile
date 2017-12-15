@@ -4,10 +4,10 @@ FROM telegraf:1.4-alpine
 USER root
 
 # Install packages
-RUN apk add --no-cache iputils ca-certificates net-snmp-tools procps && \
+RUN apk add --no-cache \
     bash \
     curl \
-    jq
+    jq \
     unzip
 
 # Add ContainerPilot and its configuration
