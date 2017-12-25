@@ -1,0 +1,64 @@
+version: '2.1'
+# Telegraf autopilotpattern demo
+
+services:
+    # Telegraf should autodiscovery all Autopilot Pattern containers,
+    # as well as all instances in Triton Container Monitor (https://docs.joyent.com/public-cloud/api-access/prometheus),
+    # collect telemetry from there, and send output to influxdb.
+    telegraf:
+        image: autopilotpattern/telegraf:${TAG:-latest}
+        # Use a 128MB instance (also see com.joyent.package label below)
+        mem_limit: 128m
+        # Joyent recommends setting instances to always restart on Triton
+        restart: always
+        labels:
+            # This label sets the CNS name, Triton's automatic DNS
+            # Learn more at https://docs.joyent.com/public-cloud/network/cns
+            - triton.cns.services=telegraf
+            # This label selects the proper Joyent resource package
+            # https://www.joyent.com/blog/optimizing-docker-on-triton#ram-cpu-and-disk-resources-for-your-containers
+            - com.joyent.package=g4-highcpu-128M
+        network_mode: bridge
+        ports:
+            # You may not want these port declarations for production. Without them, Prometheus will only
+            # listen on the private network. This will also result in a public prometheus CNS record being created,
+            # in the triton.zone domain.
+            - 8094
+            - 9090
+        env_file: _env
+        environment:
+            - CONSUL_AGENT=1
+            - CONSUL=telegraph-consul.svc.${TRITON_CNS_SEARCH_DOMAIN_PRIVATE}
+
+    # InfluxDB
+    influxdb:
+        image: influxdb:latest
+        mem_limit: 512m
+        network_mode: bridge
+        ports:
+          - "8083:8083"
+          - "8086:8086"
+          - "8090:8090"
+        env_file:
+          - '_env'
+
+    # Consul is the service catalog
+    consul:
+        image: autopilotpattern/consul:0.7.2-r0.8
+        command: >
+            /usr/local/bin/containerpilot
+            /bin/consul agent -server
+                -bootstrap-expect 1
+                -config-dir=/etc/consul
+                -ui-dir /ui
+                # Change "-bootstrap" to "-bootstrap-expect 3", then scale to 3 or more to
+                # turn this into an HA Consul raft.
+        restart: always
+        mem_limit: 128m
+        network_mode: bridge
+        ports:
+            # As above, this port delcaration should not be made for production.
+            - 8500
+        labels:
+            - triton.cns.services=telegraph-consul
+        network_mode: bridge
